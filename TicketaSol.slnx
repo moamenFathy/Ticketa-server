@@ -4,6 +4,7 @@
     <File Path="docs/authentication.md" />
     <File Path="docs/database.md" />
     <File Path="docs/testing-plan.md" />
+    <File Path="health.md" />
   </Folder>
   <Folder Name="/docs/decisions/">
     <File Path="docs/decisions/hall-template.md" />

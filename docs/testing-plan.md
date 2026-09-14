@@ -117,12 +117,13 @@ Phase 0 [Done ✅] ──> Phase 1 [Done ✅] ──> Phase 2 [Done ✅] ──>
         │
         └───> Phase 4 [Done ✅] ──> Phase 5 [Done ✅] ──> Phase 6 [Done ✅]
                 │
-                └───> Phase 7 [Done ✅] ──> Phase 8 [Done ✅] ──> Phase 9 [Done ⭐]
+                └───> Phase 7 [Done ✅] ──> Phase 8 [Done ✅] ──> Phase 9 [Integration ⏳]
                         │
                         └───> Phase 10 [E2E Playwright]
 ```
 
-* **Test Suite Status**: **202 / 202 tests passing** across `Ticketa.Tests` (`dotnet test`).
+* **Test Suite Status**: **199 / 199 pure unit tests passing** across `Ticketa.Tests` (`dotnet test`).
+* **Cross-Platform**: 100% platform-independent, executing cleanly on both Windows and Linux CI/CD environments.
 * **Core Domain Coverage**: **81.0%** line coverage on `Ticketa.Core`.
 * **Infrastructure Services Coverage**: **68.2%** line coverage on `Ticketa.Infrastructure` (with `DashboardService` at 99%, `NotificationService` at 97%, `PaymentService` at 100%, `ProfileService` at 100%, `AdminManagementService` at 92%, and `TokenService` at 100%).
 * **Overall Method Coverage**: **78.4%**.
@@ -419,24 +420,10 @@ Validates background task cycles, session completion specifications, and soft-de
 
 ---
 
-### Phase 9 — Integration: The Concurrency Test ⭐ ✅ (Implemented in `BookingConcurrencyIntegrationTests.cs`)
-
-The centerpiece integration test suite executed against **real Microsoft SQL Server engine (`(localdb)\mssqllocaldb`)**, proving row-level locking, foreign key integrity, and unique constraint conflict handling under genuine multi-threaded execution:
-
-#### 1. ⭐ Multi-Threaded Collision Protection (Zero Double-Booking)
-* `CreateAsync_WhenTwoUsersConcurrentlyBookExactSameSeat_RealSqlServerEnforcesUniqueConstraint`
-  * Two independent database contexts (`contextUserA` and `contextUserB`) fire simultaneous `CreateAsync` requests for Seat `(Row 1, Seat 1)` in parallel via `Task.WhenAll`.
-  * **Proof**: Exactly 1 user's booking succeeds with `Succeeded = true`, while the second user catches the SQL Server unique constraint violation (`IX_BookedSeats_ShowtimeId_Row_SeatNumber`) and returns `Succeeded = false` with conflicting seat coordinates.
-  * **Storage Invariant**: Direct query against SQL Server proves **exactly 1 `BookedSeat` row** exists in the table.
-
-#### 2. 🎟️ Simultaneous Multi-Seat Independence
-* `CreateAsync_WhenTwoUsersBookDifferentSeatsSimultaneously_BothSucceedInRealSqlServer`
-  * User A books `(Row 1, Seat 1)` and User B books `(Row 1, Seat 2)` concurrently.
-  * Both transactions commit cleanly to SQL Server, creating 2 distinct `BookedSeat` records without deadlock or false collisions.
-
-#### 3. 🏁 Real SQL Server Capacity Saturation
-* `CreateAsync_WhenConcurrencyReachesCapacity_RealSqlServerTransitionsShowtimeToSoldOut`
-  * Tests capacity thresholds under real database transactions, proving that booking the final available seat in an auditorium updates `Showtime.Status` to `SoldOut` in SQL Server storage.
+### Phase 9 — Integration: The Concurrency Test ⭐ (Planned for Multi-Container CI)
+* Spawns a real disposable SQL Server via **Testcontainers.MsSql** or Docker Compose.
+* Fires parallel `CreateAsync` requests for the **exact same seat** at the same instant.
+* Proves that the `(ShowtimeId, Row, SeatNumber)` unique constraint blocks the second request, triggering the automated conflict and refund path.
 
 ---
 
