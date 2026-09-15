@@ -9,10 +9,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: development-auto-commits
-  cancel-in-progress: false
-
 jobs:
   health-check:
     runs-on: ubuntu-latest
@@ -20,9 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: development
-          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -57,14 +50,6 @@ jobs:
 
           git add health.md
 
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
+          git diff --cached --quiet || git commit -m "chore: update project health"
 
-          git commit -m "chore: update project health"
-
-          git pull --rebase origin development
-
-          git push origin development
-```
+          git push
