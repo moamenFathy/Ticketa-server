@@ -3,8 +3,11 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Ticketa.Web</title>
+    <title>@ViewData["Title"] - Ticketa Admin</title>
     <script type="importmap"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="~/Ticketa.Web.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="https://cdn.datatables.net/2.3.7/css/dataTables.dataTables.css" />
     <link rel="stylesheet" href="~/css/output.css" asp-append-version="true" />
@@ -12,18 +15,26 @@
     <link rel="icon" type="image/x-icon" href="~/favicon.ico" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
 </head>
-<body class="">
-    <nav class="navbar w-full bg-base-300 flex justify-between">
-        <div>
+<body class="font-sans antialiased">
+    <nav class="navbar w-full bg-base-300/80 backdrop-blur-md border-b border-base-300 flex justify-between sticky top-0 z-40">
+        <div class="flex items-center gap-2">
             <label id="drawerToggleBtn" for="my-drawer-4" aria-label="open sidebar" class="btn btn-square btn-ghost swap swap-rotate">
                 <input id="drawerSwapState" type="checkbox" class="hidden" />
                 <svg class="swap-off my-1.5 inline-block size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18" /><path d="M3 6h18" /><path d="M3 18h18" /></svg>
                 <svg class="swap-on my-1.5 inline-block size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
             </label>
+            <a class="flex items-center gap-2.5 px-2 py-1 rounded-lg hover:bg-base-content/5 transition-all group" asp-controller="Dashboard" asp-action="Index">
+                <img src="~/images/final_logo.svg" alt="Ticketa" class="size-8 object-contain drop-shadow-sm group-hover:scale-105 transition-transform" />
+                <div class="flex items-center gap-2">
+                    <span class="font-black text-xl tracking-tighter uppercase leading-none">
+                        ticke<span class="text-primary">ta</span>
+                    </span>
+                    <span class="badge badge-sm badge-primary/15 text-primary border border-primary/30 font-bold uppercase tracking-wider text-[10px] py-0.5">
+                        Admin
+                    </span>
+                </div>
+            </a>
         </div>
-        <a class="btn btn-ghost text-xl" asp-controller="Dashboard" asp-action="Index">
-            Admin Dashboard
-        </a>
         <div class="px-4 flex gap-2">
             <label class="btn btn-ghost btn-circle swap swap-rotate">
                 <!-- this hidden checkbox controls the state -->
@@ -47,7 +58,7 @@
             <div class="dropdown dropdown-end">
                 <button tabindex="0" role="button" class="btn btn-ghost btn-circle relative" aria-label="Notifications">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-5"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-                    <span id="notificationDot" class="hidden absolute top-0.5 right-0.5 size-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                    <span id="notificationDot" class="hidden absolute top-0.5 right-0.5 size-2.5 rounded-full bg-primary animate-pulse"></span>
                 </button>
                 <div tabindex="-1" class="dropdown-content bg-base-100 rounded-box z-1 mt-3 w-80 p-2 shadow border border-base-200">
                     <ul id="notificationList" class="max-h-96 overflow-y-auto">
@@ -65,9 +76,16 @@
                                 <img alt="User avatar" src="https://ui-avatars.com/api/?name=@(Uri.EscapeDataString(User.Identity?.Name!) ?? "User")&background=random" />
                             </div>
                         </div>
-                        <ul tabindex="-1" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-1 mt-3 w-52 p-2 shadow truncate">
-                            <span class="menu-title" style="font-size: 10px">@User.Identity?.Name</span>
-                            <li><a asp-controller="Auth" asp-action="Logout">Logout</a></li>
+                        <ul tabindex="-1" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-1 mt-3 w-56 p-2 shadow-lg border border-base-200">
+                            <li class="menu-title px-3 py-1.5 text-xs opacity-60 font-semibold border-b border-base-200 mb-1 truncate">
+                                @User.Identity?.Name
+                            </li>
+                            <li>
+                                <a asp-controller="Auth" asp-action="Logout" class="flex items-center justify-between w-full !text-red-500 hover:!bg-red-500/15 hover:!text-red-600 active:!bg-red-500/25 font-semibold rounded-lg px-3 py-2 transition-all group mt-1">
+                                    <span class="text-red-500 group-hover:text-red-600 font-semibold">Logout</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="size-4 text-red-500 stroke-red-500 group-hover:translate-x-0.5 transition-transform"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                                </a>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -94,7 +112,14 @@
 
         <div class="drawer-side is-drawer-close:overflow-visible lg:sticky lg:top-0 lg:h-[calc(100vh-4rem)]">
             <label for="my-drawer-4" aria-label="close sidebar" class="drawer-overlay"></label>
-            <div class="flex h-full flex-col items-start bg-base-200 is-drawer-close:w-14 is-drawer-open:w-64">
+            <div class="flex h-full flex-col items-start bg-base-200 is-drawer-close:w-14 is-drawer-open:w-64 border-r border-base-300 transition-all">
+                <div class="w-full px-4 py-3 border-b border-base-300/60 is-drawer-close:hidden flex items-center gap-3">
+                    <img src="~/images/final_logo.svg" alt="Ticketa" class="size-6 object-contain" />
+                    <div class="flex flex-col">
+                        <span class="text-xs font-black tracking-tight leading-none uppercase">Ticketa</span>
+                        <span class="text-[8px] font-bold tracking-[0.25em] text-primary uppercase mt-0.5">Control Panel</span>
+                    </div>
+                </div>
                 <!-- Sidebar content here -->
                 <ul class="menu w-full grow">
                     <li>

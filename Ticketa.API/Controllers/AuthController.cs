@@ -51,15 +51,27 @@ namespace Ticketa.API.Controllers
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh(CancellationToken ct)
     {
+      // Web clients send the refresh token via the HttpOnly cookie; mobile clients
+      // send it in the JSON body.
       var refreshToken = Request.Cookies["refreshToken"];
+      if (string.IsNullOrEmpty(refreshToken) && Request.HasJsonContentType())
+      {
+        var dto = await Request.ReadFromJsonAsync<RefreshTokenDto>(ct);
+        refreshToken = dto?.RefreshToken;
+      }
       if (string.IsNullOrEmpty(refreshToken))
         return Unauthorized();
 
       var result = await _authService.RefreshTokenAsync(refreshToken, ct);
       if (!result.Succeeded) return Unauthorized(result.Message);
 
-      AppendRefreshTokenCookie(result.RefreshToken!);
-      return Ok(new { accessToken = result.AccessToken });
+      if (Request.Cookies["refreshToken"] is not null)
+      {
+        AppendRefreshTokenCookie(result.RefreshToken!);
+        return Ok(new { accessToken = result.AccessToken });
+      }
+
+      return Ok(new { accessToken = result.AccessToken, refreshToken = result.RefreshToken });
     }
 
     [HttpPost("resend-confirmation")]
@@ -81,6 +93,25 @@ namespace Ticketa.API.Controllers
 
       AppendRefreshTokenCookie(result.RefreshToken!);
       return Ok(new { accessToken = result.AccessToken });
+    }
+
+    [HttpPost("google-mobile")]
+    public async Task<IActionResult> GoogleMobile(GoogleAuthDto dto, CancellationToken ct)
+    {
+      if (!ModelState.IsValid) return ValidationProblem(ModelState);
+
+      var result = await _authService.GoogleMobileAuthAsync(dto.IdToken, ct);
+      if (result is null || string.IsNullOrEmpty(result.AccessToken))
+        return Unauthorized(new { message = result?.Message ?? "Google login failed" });
+
+      return Ok(new
+      {
+        email = result.Email,
+        isNewUser = result.IsNewUser,
+        hasPassword = result.HasPassword,
+        token = result.AccessToken,
+        refreshToken = result.RefreshToken
+      });
     }
 
     [HttpPost("forget-password")]
@@ -108,7 +139,15 @@ namespace Ticketa.API.Controllers
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
+      // Web clients send the refresh token via the HttpOnly cookie; mobile clients
+      // send it in the JSON body.
       var refreshToken = Request.Cookies["refreshToken"];
+      if (string.IsNullOrEmpty(refreshToken) && Request.HasJsonContentType())
+      {
+        var dto = await Request.ReadFromJsonAsync<RefreshTokenDto>(ct);
+        refreshToken = dto?.RefreshToken;
+      }
+
       await _authService.LogoutAsync(refreshToken, ct);
 
       Response.Cookies.Delete("refreshToken");

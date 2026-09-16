@@ -35,6 +35,9 @@ namespace Ticketa.Infrastructure.Configuration
         .HasMaxLength(20);
 
       builder.HasIndex(m => m.IsArchived).HasFilter("[IsArchived] = 0");
+
+      // Index for DataTable search by title
+      builder.HasIndex(m => m.Title);
     }
   }
 }

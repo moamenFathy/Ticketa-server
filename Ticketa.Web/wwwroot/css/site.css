@@ -4,6 +4,97 @@
     themes: light --default, dark --prefersdark;
 }
 
+@plugin "daisyui/theme" {
+    name: "light";
+    default: true;
+    --color-primary: oklch(67.2% 0.191 39deg);
+    --color-primary-content: oklch(1 0 0);
+    --color-secondary: oklch(0.965 0.01 85);
+    --color-secondary-content: oklch(0.18 0 0);
+    --color-accent: oklch(0.965 0.01 85);
+    --color-accent-content: oklch(0.18 0 0);
+    --color-neutral: oklch(0.25 0 0);
+    --color-neutral-content: oklch(0.985 0 0);
+    --color-base-100: oklch(0.992 0.004 85);
+    --color-base-200: oklch(0.965 0.01 85);
+    --color-base-300: oklch(0.92 0.01 85);
+    --color-base-content: oklch(0.12 0 0);
+    --radius-selector: 0.625rem;
+    --radius-field: 0.625rem;
+    --radius-box: 0.625rem;
+}
+
+@plugin "daisyui/theme" {
+    name: "dark";
+    prefersdark: true;
+    --color-primary: oklch(67.2% 0.191 39deg);
+    --color-primary-content: oklch(1 0 0);
+    --color-secondary: oklch(0.225 0 0);
+    --color-secondary-content: oklch(0.985 0 0);
+    --color-accent: oklch(0.225 0 0);
+    --color-accent-content: oklch(0.985 0 0);
+    --color-neutral: oklch(0.12 0 0);
+    --color-neutral-content: oklch(0.985 0 0);
+    --color-base-100: oklch(0.165 0 0);
+    --color-base-200: oklch(0.105 0 0);
+    --color-base-300: oklch(0.225 0 0);
+    --color-base-content: oklch(0.985 0 0);
+    --radius-selector: 0.625rem;
+    --radius-field: 0.625rem;
+    --radius-box: 0.625rem;
+}
+
+@theme {
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --color-primary: oklch(67.2% 0.191 39deg);
+}
+
+body {
+    font-family: var(--font-sans);
+}
+
+/* Sidebar Menu Item & Active Tab Styling */
+.menu li > a {
+    @apply transition-all duration-200 font-medium text-base-content/70 rounded-xl py-2.5 px-3.5 my-0.5;
+}
+
+.menu li > a:hover {
+    @apply text-base-content bg-base-content/10;
+}
+
+.menu li > a.menu-active,
+.menu li > a:active,
+.menu li > a.active {
+    @apply !bg-primary/15 !text-primary font-bold shadow-sm ring-1 ring-primary/30;
+}
+
+.menu li > a.menu-active svg,
+.menu li > a.active svg {
+    @apply !text-primary !stroke-primary;
+}
+
+[data-theme="dark"] .menu li > a.menu-active,
+[data-theme="dark"] .menu li > a.active,
+.dark .menu li > a.menu-active {
+    background-color: oklch(67.2% 0.191 39deg / 0.18) !important;
+    color: oklch(67.2% 0.191 39deg) !important;
+    box-shadow: 0 0 16px oklch(67.2% 0.191 39deg / 0.15) !important;
+    outline: 1px solid oklch(67.2% 0.191 39deg / 0.35) !important;
+}
+
+[data-theme="dark"] .menu li > a.menu-active svg,
+[data-theme="dark"] .menu li > a.active svg,
+.dark .menu li > a.menu-active svg {
+    color: oklch(67.2% 0.191 39deg) !important;
+    stroke: oklch(67.2% 0.191 39deg) !important;
+}
+
+[data-theme="dark"] .menu li > a:hover:not(.menu-active),
+.dark .menu li > a:hover:not(.menu-active) {
+    background-color: oklch(1 0 0 / 0.06) !important;
+    color: oklch(0.985 0 0) !important;
+}
+
 .dt-layout-row {
     @apply gap-3;
 }
@@ -55,17 +146,17 @@ select:focus {
 }
 
 thead {
-    @apply bg-violet-700 text-white text-xs uppercase tracking-widest;
+    @apply bg-primary text-primary-content text-xs uppercase tracking-widest font-bold;
 }
 
 .dt-container table.dataTable thead th {
-    @apply bg-violet-600 text-white text-xs uppercase tracking-widest;
+    @apply bg-primary text-primary-content text-xs uppercase tracking-widest font-bold;
 }
 
 .dt-container table.dataTable thead > tr > th span.dt-column-order::before,
 .dt-container table.dataTable thead > tr > th span.dt-column-order::after {
     color: #ffffff !important;
-    opacity: 0.25 !important;
+    opacity: 0.3 !important;
     font-size: 0.8rem !important;
     font-weight: 900;
     text-shadow: 0 0 1px rgba(255, 255, 255, 0.8);
@@ -122,18 +213,18 @@ tr th:last-child {
 .dt-paging .dt-paging-button.disabled:hover,
 .dt-paging .dt-paging-button.btn-disabled:hover,
 .dt-paging .dt-paging-button[disabled]:hover {
-    background-color: #B8B4EC !important;
+    background-color: oklch(67.2% 0.191 39deg / 0.2) !important;
 }
 
 .dt-paging .dt-paging-button:not(.btn-disabled):not([disabled]):hover {
-    background-color: #4f46e5;
+    background-color: oklch(67.2% 0.191 39deg / 0.85);
     color: #fff !important;
 }
 
 div.dt-container .dt-paging .dt-paging-button.current,
 div.dt-container .dt-paging .dt-paging-button.is-current,
 div.dt-container .dt-paging .dt-paging-button[aria-current="page"] {
-    background-color: #4338ca !important;
+    background-color: oklch(67.2% 0.191 39deg) !important;
     --btn-fg: #fff !important;
     color: #fff !important;
     -webkit-text-fill-color: #fff !important;
@@ -331,7 +422,7 @@ form label.input:has(input.input-validation-error) {
 .trailer-squircle:hover {
     border-radius: 22%;
     transform: translateY(-2px) scale(1.06);
-    box-shadow: 0 10px 18px rgb(79 70 229 / 0.32);
+    box-shadow: 0 10px 18px oklch(67.2% 0.191 39deg / 0.35);
 }
 
 .preview-scroll {
@@ -406,10 +497,17 @@ body.trailer-modal-lock {
     gap: 0.25rem;
     padding: 0.35rem;
     border-radius: 9999px;
-    @apply bg-base-100 border border-base-300;
-    box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.1);
+    @apply bg-base-200/80 border border-base-300;
+    box-shadow: 0 4px 14px -6px rgb(0 0 0 / 0.12);
     isolation: isolate;
     width: fit-content;
+}
+
+[data-theme="dark"] .msf-track,
+.dark .msf-track {
+    background-color: oklch(0.12 0 0 / 0.85) !important;
+    border-color: oklch(1 0 0 / 0.12) !important;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 14px -6px rgba(0, 0, 0, 0.5) !important;
 }
 
 .msf-pill {
@@ -418,11 +516,18 @@ body.trailer-modal-lock {
     left: 0;
     height: calc(100% - 0.7rem);
     border-radius: 9999px;
-    @apply bg-base-100 border border-primary/50;
-    box-shadow: 0 4px 10px -2px rgb(79 70 229 / 0.15);
+    @apply bg-base-100 border border-primary/60;
+    box-shadow: 0 4px 12px -2px oklch(67.2% 0.191 39deg / 0.25);
     transition: transform 350ms cubic-bezier(.22, 1, .36, 1), width 350ms cubic-bezier(.22, 1, .36, 1);
     z-index: 0;
     will-change: transform, width;
+}
+
+[data-theme="dark"] .msf-pill,
+.dark .msf-pill {
+    background-color: oklch(67.2% 0.191 39deg / 0.2) !important;
+    border: 1px solid oklch(67.2% 0.191 39deg / 0.7) !important;
+    box-shadow: 0 0 16px oklch(67.2% 0.191 39deg / 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
 }
 
 .msf-track--view .msf-pill {
@@ -445,22 +550,33 @@ body.trailer-modal-lock {
     z-index: 1;
     border: 0;
     background: transparent;
-    @apply text-base-content/60;
+    @apply text-base-content/65;
     padding: 0.5rem 1.25rem;
     border-radius: 9999px;
     font-size: 0.875rem;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition: color 280ms ease;
+    transition: color 280ms ease, font-weight 200ms ease;
     white-space: nowrap;
 }
 
 .msf-btn:hover,
-.msf-btn:focus-visible,
-.msf-btn.is-active {
+.msf-btn:focus-visible {
     @apply text-base-content;
     outline: none;
+}
+
+.msf-btn.is-active {
+    @apply text-primary font-bold;
+    outline: none;
+}
+
+[data-theme="dark"] .msf-btn.is-active,
+.dark .msf-btn.is-active {
+    color: oklch(67.2% 0.191 39deg) !important;
+    text-shadow: 0 0 12px oklch(67.2% 0.191 39deg / 0.5);
+    font-weight: 800;
 }
 
 input[type="text"] {
@@ -475,4 +591,36 @@ input::-webkit-inner-spin-button {
 
 table.dataTable > tbody > tr > th, table.dataTable > tbody > tr > td {
     padding: 0px;
+}
+
+/* Slide-Over Sheet Styles */
+.role-sheet-container {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.role-sheet-container.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.role-sheet-backdrop {
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.role-sheet-container.is-open .role-sheet-backdrop {
+    opacity: 1;
+}
+
+.role-sheet-panel {
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.role-sheet-container.is-open .role-sheet-panel {
+    transform: translateX(0);
 }

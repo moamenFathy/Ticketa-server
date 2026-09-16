@@ -19,7 +19,9 @@ namespace Ticketa.Infrastructure.Service
       IEmailService emailService,
       IQrCodeService qrCodeService,
       IConfiguration configuration,
-      ILogger<PaymentService> logger) : IPaymentService
+      ILogger<PaymentService> logger,
+      PaymentIntentService? paymentIntentService = null,
+      RefundService? refundService = null) : IPaymentService
   {
     private readonly IUnitOfWork _uow = uow;
     private readonly IBookingService _bookingService = bookingService;
@@ -27,12 +29,13 @@ namespace Ticketa.Infrastructure.Service
     private readonly IQrCodeService _qrCodeService = qrCodeService;
     private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<PaymentService> _logger = logger;
+    private readonly PaymentIntentService _paymentIntentService = paymentIntentService ?? new PaymentIntentService();
+    private readonly RefundService _refundService = refundService ?? new RefundService();
     private static char RowToLetter(int row) => (char)('A' + row - 1);
 
     public async Task<BookingResultDto> ConfirmAsync(string paymentIntentId, string userId, CancellationToken ct = default)
     {
-      var service = new PaymentIntentService();
-      var paymentIntent = await service.GetAsync(paymentIntentId, cancellationToken: ct);
+      var paymentIntent = await _paymentIntentService.GetAsync(paymentIntentId, cancellationToken: ct);
 
       if (paymentIntent.Status != "succeeded")
         return BookingResultDto.Failure("Payment has not been completed.");
@@ -56,8 +59,7 @@ namespace Ticketa.Infrastructure.Service
 
       if (!result.Succeeded && result.ConflictingSeats.Count > 0)
       {
-        var refundService = new RefundService();
-        await refundService.CreateAsync(
+        await _refundService.CreateAsync(
             new RefundCreateOptions { PaymentIntent = paymentIntentId },
             cancellationToken: ct
           );
@@ -175,8 +177,7 @@ namespace Ticketa.Infrastructure.Service
         IdempotencyKey = Guid.NewGuid().ToString("N")
       };
 
-      var service = new PaymentIntentService();
-      var paymnetIntent = await service.CreateAsync(options, requestOptions, ct);
+      var paymnetIntent = await _paymentIntentService.CreateAsync(options, requestOptions, ct);
 
       var payment = new Payment
       {

@@ -50,11 +50,7 @@ namespace Ticketa.Infrastructure.Service
       GoogleJsonWebSignature.Payload payload;
       try
       {
-        var settings = new GoogleJsonWebSignature.ValidationSettings
-        {
-          Audience = [_config["Google:ClientId"]]
-        };
-        payload = await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
+        payload = await GoogleJsonWebSignature.ValidateAsync(idToken, GetGoogleValidationSettings());
       }
       catch
       {
@@ -182,7 +178,94 @@ namespace Ticketa.Infrastructure.Service
       await SendVerificationCodeAsync(user);
     }
 
+    public async Task<ExternalLoginResultDto> GoogleMobileAuthAsync(string idToken, CancellationToken ct = default)
+    {
+      GoogleJsonWebSignature.Payload payload;
+      try
+      {
+        payload = await GoogleJsonWebSignature.ValidateAsync(idToken, GetGoogleValidationSettings());
+      }
+      catch
+      {
+        return new ExternalLoginResultDto { Message = "Invalid Google token." };
+      }
+
+      var user = await _userManager.FindByEmailAsync(payload.Email);
+      var isNewUser = false;
+
+      if (user is null)
+      {
+        user = new AppUser
+        {
+          UserName = payload.Email,
+          Email = payload.Email,
+          EmailConfirmed = true,
+          Theme = "light",
+          FirstName = payload.GivenName ?? "",
+          LastName = payload.FamilyName ?? ""
+        };
+        var createResult = await _userManager.CreateAsync(user);
+        if (!createResult.Succeeded)
+          return new ExternalLoginResultDto { Message = "Failed to create user account." };
+        isNewUser = true;
+      }
+      else
+      {
+        var namesChanged = false;
+        if (!string.IsNullOrEmpty(payload.GivenName) && user.FirstName != payload.GivenName)
+        {
+          user.FirstName = payload.GivenName;
+          namesChanged = true;
+        }
+        if (!string.IsNullOrEmpty(payload.FamilyName) && user.LastName != payload.FamilyName)
+        {
+          user.LastName = payload.FamilyName;
+          namesChanged = true;
+        }
+        if (!user.EmailConfirmed || namesChanged)
+        {
+          user.EmailConfirmed = true;
+          await _userManager.UpdateAsync(user);
+        }
+      }
+
+      var (accessToken, refreshToken, refreshTokenExpiry) = await BuildTokensAsync(user);
+
+      return new ExternalLoginResultDto
+      {
+        IsNewUser = isNewUser,
+        HasPassword = await _userManager.HasPasswordAsync(user),
+        Email = user.Email,
+        AccessToken = accessToken,
+        RefreshToken = refreshToken,
+        RefreshTokenExpiry = refreshTokenExpiry,
+        Message = "Logged in successfully via Google"
+      };
+    }
+
     private async Task<AuthResultDto> IssueTokensAsync(AppUser user)
+    {
+      var (accessToken, refreshToken, _) = await BuildTokensAsync(user);
+      return AuthResultDto.Success(accessToken, refreshToken);
+    }
+
+    private GoogleJsonWebSignature.ValidationSettings GetGoogleValidationSettings()
+    {
+      var audiences = new List<string>();
+      if (!string.IsNullOrWhiteSpace(_config["Google:ClientId"]))
+        audiences.Add(_config["Google:ClientId"]!);
+      if (!string.IsNullOrWhiteSpace(_config["Google:IosClientId"]))
+        audiences.Add(_config["Google:IosClientId"]!);
+      if (!string.IsNullOrWhiteSpace(_config["Google:AndroidClientId"]))
+        audiences.Add(_config["Google:AndroidClientId"]!);
+
+      return new GoogleJsonWebSignature.ValidationSettings
+      {
+        Audience = audiences.Count > 0 ? audiences : null
+      };
+    }
+
+    private async Task<(string AccessToken, string RefreshToken, DateTime RefreshTokenExpiry)> BuildTokensAsync(AppUser user)
     {
       var roles = await _userManager.GetRolesAsync(user);
       var permissions = new List<string>();
@@ -198,12 +281,12 @@ namespace Ticketa.Infrastructure.Service
       var accessToken = _tokenService.GenerateAccessToken(user, roles, permissions.Distinct().ToList());
       var refreshToken = _tokenService.GenerateRefreshToken();
 
-      var expiryDays = _jwtSettings.RefreshTokenExpiryDate;
+      var refreshTokenExpiry = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryDate);
       user.RefreshToken = refreshToken;
-      user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(expiryDays);
+      user.RefreshTokenExpiry = refreshTokenExpiry;
       await _userManager.UpdateAsync(user);
 
-      return AuthResultDto.Success(accessToken, refreshToken);
+      return (accessToken, refreshToken, refreshTokenExpiry);
     }
 
     private async Task SendVerificationCodeAsync(AppUser user)

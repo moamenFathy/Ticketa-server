@@ -424,22 +424,34 @@
 .tl-view-tabs {
   position: relative;
   display: flex;
-  gap: 0;
-  border-bottom: 2px solid color-mix(in srgb, var(--fallback-b2, #e5e7eb) 50%, transparent);
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--fallback-b2, #e5e7eb) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fallback-bc, #000) 12%, transparent);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
   align-self: center;
+}
+
+[data-theme="dark"] .tl-view-tabs,
+.dark .tl-view-tabs {
+  background: oklch(0.12 0 0 / 0.85);
+  border-color: oklch(1 0 0 / 0.12);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
 }
 
 .tl-view-tab {
   padding: 6px 18px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: color-mix(in srgb, var(--fallback-bc, #333) 45%, transparent);
-  background: none;
+  color: color-mix(in srgb, var(--fallback-bc, #333) 65%, transparent);
+  background: transparent;
   border: none;
+  border-radius: 9999px;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color 0.25s, font-weight 0.2s;
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .tl-view-tab:hover {
@@ -447,17 +459,35 @@
 }
 
 .tl-view-tab.is-active {
-  color: var(--fallback-p, #6366f1);
+  color: oklch(67.2% 0.191 39deg);
+  font-weight: 700;
+}
+
+[data-theme="dark"] .tl-view-tab.is-active,
+.dark .tl-view-tab.is-active {
+  color: oklch(67.2% 0.191 39deg);
+  text-shadow: 0 0 10px oklch(67.2% 0.191 39deg / 0.5);
+  font-weight: 800;
 }
 
 .tl-view-underline {
   position: absolute;
-  bottom: -2px;
+  top: 0.25rem;
+  bottom: 0.25rem;
   left: 0;
-  height: 2px;
-  background: var(--fallback-p, #6366f1);
+  height: calc(100% - 0.5rem);
+  background: var(--fallback-b1, #ffffff);
+  border: 1px solid oklch(67.2% 0.191 39deg / 0.6);
+  box-shadow: 0 3px 10px -2px oklch(67.2% 0.191 39deg / 0.25);
   transition: left 0.3s cubic-bezier(.22, 1, .36, 1), width 0.3s cubic-bezier(.22, 1, .36, 1);
-  z-index: 2;
-  border-radius: 1px;
+  z-index: 1;
+  border-radius: 9999px;
   pointer-events: none;
+}
+
+[data-theme="dark"] .tl-view-underline,
+.dark .tl-view-underline {
+  background: oklch(67.2% 0.191 39deg / 0.2);
+  border: 1px solid oklch(67.2% 0.191 39deg / 0.7);
+  box-shadow: 0 0 14px oklch(67.2% 0.191 39deg / 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.15);
 }

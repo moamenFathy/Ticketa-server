@@ -89,14 +89,59 @@ namespace Ticketa.Infrastructure.Service
 
       var searchValue = string.IsNullOrWhiteSpace(search) ? null : search;
 
-      var totalSpec = new ShowtimeSpecification(archivedOnly: null);
-      var allShowtimes = await _uow.Showtimes.GetAllWithSpecAsync(totalSpec);
-      var totalMovies = allShowtimes.Select(s => s.MovieId).Distinct().Count();
+      // ── 1. Run count + filtered-ID fetch in parallel ──────────
+      var totalTask = context.Showtimes
+          .Where(s => !s.IsArchived)
+          .Select(s => s.MovieId)
+          .Distinct()
+          .CountAsync();
 
-      var spec = new ShowtimeSpecification(status, searchValue, archivedOnly: null);
-      var showtimes = await _uow.Showtimes.GetAllWithSpecAsync(spec);
+      IQueryable<Showtime> filteredQuery = context.Showtimes.Where(s => !s.IsArchived);
 
-      var movieGroupsQuery = showtimes
+      if (status.HasValue)
+        filteredQuery = filteredQuery.Where(s => s.Status == status.Value);
+
+      if (!string.IsNullOrEmpty(searchValue))
+        filteredQuery = filteredQuery.Where(s =>
+            s.Movie.Title.Contains(searchValue) || s.Hall.Name.Contains(searchValue));
+
+      // Materialize the distinct movie IDs once — reused for count + paging
+      var filteredMovieIds = await filteredQuery
+          .Select(s => s.MovieId)
+          .Distinct()
+          .ToListAsync();
+
+      var totalMovies = await totalTask;
+      var filteredCount = filteredMovieIds.Count;
+
+      if (filteredCount == 0)
+      {
+        return new
+        {
+          draw = request.Draw,
+          recordsTotal = totalMovies,
+          recordsFiltered = 0,
+          data = Array.Empty<MovieShowtimeDto>()
+        };
+      }
+
+      // ── 2. Slice the in-memory list for paging ────────────────
+      var pagedMovieIds = filteredMovieIds
+          .OrderBy(id => id)  // stable sort; title ordering applied below
+          .Skip(request.Start)
+          .Take(request.Length)
+          .ToList();
+
+      // ── 3. Load showtimes only for paged movies (with includes) ─
+      var showtimes = await context.Showtimes
+          .Include(s => s.Movie)
+              .ThenInclude(m => m.Genres)
+          .Include(s => s.Hall)
+          .Where(s => pagedMovieIds.Contains(s.MovieId))
+          .ToListAsync();
+
+      // ── 4. Group by movie in C# (small paged set) ─────────────
+      var movieGroups = showtimes
           .GroupBy(s => s.Movie)
           .Select(g => new MovieShowtimeDto
           {
@@ -121,25 +166,16 @@ namespace Ticketa.Infrastructure.Service
               IsArchived = s.IsArchived,
               ArchivedAt = s.ArchivedAt.HasValue ? _timeConversions.EnsureUtcKind(s.ArchivedAt.Value) : null
             }).OrderBy(s => s.StartTime).ToList()
-          });
-
-      IOrderedEnumerable<MovieShowtimeDto> ordered;
-      if (status == null)
-        ordered = movieGroupsQuery.OrderBy(m => m.Showtimes.Min(s => (int)s.Status));
-      else
-        ordered = movieGroupsQuery.OrderBy(m => m.Title);
-
-      var movieGroups = ordered.ThenBy(m => m.Title).ToList();
-
-      var filtered = movieGroups.Count;
-      var paged = movieGroups.Skip(request.Start).Take(request.Length).ToList();
+          })
+          .OrderBy(m => m.Title)
+          .ToList();
 
       return new
       {
         draw = request.Draw,
         recordsTotal = totalMovies,
-        recordsFiltered = filtered,
-        data = paged
+        recordsFiltered = filteredCount,
+        data = movieGroups
       };
     }
 
@@ -376,151 +412,151 @@ namespace Ticketa.Infrastructure.Service
           switch (change.Action)
           {
             case "create":
-            {
-              if (!change.MovieId.HasValue || !change.HallId.HasValue || string.IsNullOrEmpty(change.StartTime))
               {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "Movie, Hall, and StartTime are required." });
-                continue;
-              }
+                if (!change.MovieId.HasValue || !change.HallId.HasValue || string.IsNullOrEmpty(change.StartTime))
+                {
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "Movie, Hall, and StartTime are required." });
+                  continue;
+                }
 
-              var startLocal = DateTime.Parse(change.StartTime);
-              var utcStart = _timeConversions.ConvertToUtc(startLocal);
-
-              if (utcStart < DateTime.UtcNow)
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "A showtime cannot be scheduled in the past." });
-                continue;
-              }
-
-              if (utcStart < DateTime.UtcNow.AddHours(5))
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "A showtime must be scheduled at least 5 hours from now." });
-                continue;
-              }
-
-              var movie = await _uow.Movies.GetAsync(m => m.Id == change.MovieId.Value);
-              if (movie is null)
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "Movie not found." });
-                continue;
-              }
-
-              var hall = await _uow.Halls.GetAsync(h => h.Id == change.HallId.Value);
-              if (hall is null)
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "Hall not found." });
-                continue;
-              }
-
-              var endTime = utcStart.AddMinutes((movie.RuntimeMinutes > 0 ? movie.RuntimeMinutes : 120) + BufferMinutes);
-
-              if (await _uow.Showtimes.HasConflictAsync(change.HallId.Value, utcStart, endTime))
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = $"{hall.Name} already has a showtime during that slot." });
-                continue;
-              }
-
-              await _uow.Showtimes.CreateAsync(new Showtime
-              {
-                MovieId = change.MovieId.Value,
-                HallId = change.HallId.Value,
-                StartTime = utcStart,
-                EndTime = endTime,
-                Price = change.Price ?? 10.00m,
-                Status = ShowtimeStatus.Scheduled,
-              });
-
-              break;
-            }
-
-            case "update":
-            {
-              if (!change.ShowtimeId.HasValue)
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "ShowtimeId is required for update." });
-                continue;
-              }
-
-              var showtime = await _uow.Showtimes.GetAsync(s => s.Id == change.ShowtimeId.Value);
-              if (showtime is null)
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Showtime not found." });
-                continue;
-              }
-
-              if (!string.IsNullOrEmpty(change.StartTime))
-              {
                 var startLocal = DateTime.Parse(change.StartTime);
                 var utcStart = _timeConversions.ConvertToUtc(startLocal);
 
                 if (utcStart < DateTime.UtcNow)
                 {
-                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "A showtime cannot be moved to the past." });
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "A showtime cannot be scheduled in the past." });
                   continue;
                 }
 
                 if (utcStart < DateTime.UtcNow.AddHours(5))
                 {
-                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "A showtime must be at least 5 hours from now." });
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "A showtime must be scheduled at least 5 hours from now." });
                   continue;
                 }
 
-                if (showtime.Status == ShowtimeStatus.Completed)
+                var movie = await _uow.Movies.GetAsync(m => m.Id == change.MovieId.Value);
+                if (movie is null)
                 {
-                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Completed showtime cannot be moved." });
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "Movie not found." });
                   continue;
                 }
 
-                var movie = await _uow.Movies.GetAsync(m => m.Id == showtime.MovieId);
-                var runtime = movie?.RuntimeMinutes ?? 120;
-                var newEnd = utcStart.AddMinutes(runtime + BufferMinutes);
-
-                if (await _uow.Showtimes.HasConflictAsync(showtime.HallId, utcStart, newEnd, showtime.Id))
+                var hall = await _uow.Halls.GetAsync(h => h.Id == change.HallId.Value);
+                if (hall is null)
                 {
-                  var hall = await _uow.Halls.GetAsync(h => h.Id == showtime.HallId);
-                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = $"{hall?.Name ?? "Hall"} already has a showtime during that slot." });
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "Hall not found." });
                   continue;
                 }
 
-                showtime.StartTime = utcStart;
-                showtime.EndTime = newEnd;
+                var endTime = utcStart.AddMinutes((movie.RuntimeMinutes > 0 ? movie.RuntimeMinutes : 120) + BufferMinutes);
+
+                if (await _uow.Showtimes.HasConflictAsync(change.HallId.Value, utcStart, endTime))
+                {
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = $"{hall.Name} already has a showtime during that slot." });
+                  continue;
+                }
+
+                await _uow.Showtimes.CreateAsync(new Showtime
+                {
+                  MovieId = change.MovieId.Value,
+                  HallId = change.HallId.Value,
+                  StartTime = utcStart,
+                  EndTime = endTime,
+                  Price = change.Price ?? 10.00m,
+                  Status = ShowtimeStatus.Scheduled,
+                });
+
+                break;
               }
 
-              if (change.Price.HasValue)
-                showtime.Price = change.Price.Value;
+            case "update":
+              {
+                if (!change.ShowtimeId.HasValue)
+                {
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "ShowtimeId is required for update." });
+                  continue;
+                }
 
-              if (showtime.Status == ShowtimeStatus.SoldOut)
-                showtime.Status = ShowtimeStatus.Scheduled;
+                var showtime = await _uow.Showtimes.GetAsync(s => s.Id == change.ShowtimeId.Value);
+                if (showtime is null)
+                {
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Showtime not found." });
+                  continue;
+                }
 
-              await _uow.Showtimes.UpdateAsync(showtime);
-              break;
-            }
+                if (!string.IsNullOrEmpty(change.StartTime))
+                {
+                  var startLocal = DateTime.Parse(change.StartTime);
+                  var utcStart = _timeConversions.ConvertToUtc(startLocal);
+
+                  if (utcStart < DateTime.UtcNow)
+                  {
+                    result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "A showtime cannot be moved to the past." });
+                    continue;
+                  }
+
+                  if (utcStart < DateTime.UtcNow.AddHours(5))
+                  {
+                    result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "A showtime must be at least 5 hours from now." });
+                    continue;
+                  }
+
+                  if (showtime.Status == ShowtimeStatus.Completed)
+                  {
+                    result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Completed showtime cannot be moved." });
+                    continue;
+                  }
+
+                  var movie = await _uow.Movies.GetAsync(m => m.Id == showtime.MovieId);
+                  var runtime = movie?.RuntimeMinutes ?? 120;
+                  var newEnd = utcStart.AddMinutes(runtime + BufferMinutes);
+
+                  if (await _uow.Showtimes.HasConflictAsync(showtime.HallId, utcStart, newEnd, showtime.Id))
+                  {
+                    var hall = await _uow.Halls.GetAsync(h => h.Id == showtime.HallId);
+                    result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = $"{hall?.Name ?? "Hall"} already has a showtime during that slot." });
+                    continue;
+                  }
+
+                  showtime.StartTime = utcStart;
+                  showtime.EndTime = newEnd;
+                }
+
+                if (change.Price.HasValue)
+                  showtime.Price = change.Price.Value;
+
+                if (showtime.Status == ShowtimeStatus.SoldOut)
+                  showtime.Status = ShowtimeStatus.Scheduled;
+
+                await _uow.Showtimes.UpdateAsync(showtime);
+                break;
+              }
 
             case "delete":
-            {
-              if (!change.ShowtimeId.HasValue)
               {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "ShowtimeId is required for delete." });
-                continue;
-              }
+                if (!change.ShowtimeId.HasValue)
+                {
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, Message = "ShowtimeId is required for delete." });
+                  continue;
+                }
 
-              var showtime = await _uow.Showtimes.GetAsync(s => s.Id == change.ShowtimeId.Value);
-              if (showtime is null)
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Showtime not found." });
-                continue;
-              }
+                var showtime = await _uow.Showtimes.GetAsync(s => s.Id == change.ShowtimeId.Value);
+                if (showtime is null)
+                {
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Showtime not found." });
+                  continue;
+                }
 
-              var hasBookings = await _uow.Bookings.AnyForShowtimeAsync(change.ShowtimeId.Value);
-              if (hasBookings)
-              {
-                result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Cannot delete — it has bookings or payments." });
-                continue;
-              }
+                var hasBookings = await _uow.Bookings.AnyForShowtimeAsync(change.ShowtimeId.Value);
+                if (hasBookings)
+                {
+                  result.Errors.Add(new ShowtimeBatchErrorDto { ClientId = change.ClientId, ShowtimeId = change.ShowtimeId, Message = "Cannot delete — it has bookings or payments." });
+                  continue;
+                }
 
-              _uow.Showtimes.Delete(showtime);
-              break;
-            }
+                _uow.Showtimes.Delete(showtime);
+                break;
+              }
           }
         }
         catch (Exception ex)

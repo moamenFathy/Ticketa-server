@@ -10,10 +10,14 @@ using Ticketa.Core.Specifications;
 
 namespace Ticketa.Infrastructure.Service
 {
-  public class PaymentManagementService(IUnitOfWork uow, IBookingService bookingService) : IPaymentManagementService
+  public class PaymentManagementService(
+      IUnitOfWork uow,
+      IBookingService bookingService,
+      RefundService? refundService = null) : IPaymentManagementService
   {
     private readonly IUnitOfWork _uow = uow;
     private readonly IBookingService _bookingService = bookingService;
+    private readonly RefundService _refundService = refundService ?? new RefundService();
 
     public async Task<List<PaymentListItemDto>> GetAllAsync()
     {
@@ -84,8 +88,7 @@ namespace Ticketa.Infrastructure.Service
 
       try
       {
-        var refundService = new RefundService();
-        await refundService.CreateAsync(
+        await _refundService.CreateAsync(
             new RefundCreateOptions { PaymentIntent = payment.StripePaymentIntentId }
           );
 

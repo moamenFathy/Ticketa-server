@@ -1,4 +1,4 @@
-﻿function openModal(formId, url, name) {
+function openModal(formId, url, name) {
     fetch(url)
         .then(res => {
             if (!res.ok) {
@@ -89,11 +89,15 @@ async function handleModalFormSubmit(form, url) {
             body: formData
         });
 
+        const targetContainer = form.closest("#sheetContent") || document.getElementById("modalContent");
+
         // Validation failed or server error → re-render form with errors
         const contentType = response.headers.get("content-type");
         if (!response.ok || contentType?.includes("text/html")) {
             const html = await response.text();
-            document.getElementById("modalContent").innerHTML = html || "<p class='text-danger'>Request failed.</p>";
+            if (targetContainer) {
+                targetContainer.innerHTML = html || "<p class='text-error'>Request failed.</p>";
+            }
 
             const failedForm = $(`#${form.id}`);
             failedForm.removeData("validator").removeData("unobtrusiveValidation");
@@ -104,7 +108,11 @@ async function handleModalFormSubmit(form, url) {
         // Success → JSON
         const result = await response.json();
         if (result.success) {
-            document.getElementById("modal").checked = false;
+            const modalCheckbox = document.getElementById("modal");
+            if (modalCheckbox) modalCheckbox.checked = false;
+            if (typeof window.closeRoleSheet === "function") {
+                window.closeRoleSheet();
+            }
             location.reload();
         } else if (result.message) {
             const errorBanner = document.getElementById("errorBanner");

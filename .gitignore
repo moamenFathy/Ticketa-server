@@ -366,3 +366,6 @@ FodyWeavers.xsd
 **/appsettings.Production.json
 /Ticketa.Web/appsettings.Development.json
 /Ticketa.Web/dotnet-tools.json
+
+coveragereport/
+run-coverage.bat

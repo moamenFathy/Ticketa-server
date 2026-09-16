@@ -317,12 +317,12 @@ if (dataTableElement) {
                             const tooltipMsg = canEdit ? "Edit" : "Cannot edit within 5 hours of starting";
 
                             const editButton = canEdit
-                                ? `<button type="button" class="btn btn-square btn-outline btn-sm border-base-300 text-violet-500 hover:bg-violet-50 hover:bg-base-200 hover:border-base-400 tooltip" data-tip="${tooltipMsg}" onclick="openModal('createForm', '/showtime/Upsert/' + ${st.id}, 'showtime')">
+                                ? `<button type="button" class="btn btn-square btn-outline btn-sm border-base-300 text-primary hover:bg-primary/10 hover:border-primary/40 tooltip" data-tip="${tooltipMsg}" onclick="openModal('createForm', '/showtime/Upsert/' + ${st.id}, 'showtime')">
                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
-                                   </button>`
+                                    </button>`
                                 : `<button type="button" class="btn btn-square btn-outline btn-sm border-base-300 text-base-content/30 cursor-not-allowed tooltip" data-tip="${tooltipMsg}" disabled>
                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
-                                   </button>`;
+                                    </button>`;
 
                             const deleteButton = st.isArchived
                                 ? `<button type="button" class="btn btn-square btn-outline btn-sm border-base-300 text-red-500 hover:bg-red-50 hover:border-red-200 tooltip" data-tip="Delete" onclick="openModal('deleteForm', '/Showtime/DeleteConfirmation/${st.id}', 'showtime')">
@@ -331,7 +331,7 @@ if (dataTableElement) {
                                 : '';
 
                             const trailerButton = `
-                                <button type="button" class="btn btn-square btn-outline btn-sm border-base-300 text-indigo-600 hover:bg-blue-50 hover:border-base-400 tooltip" data-tip="Trailer" onclick="openMovieTrailer(this, '${(row.title ?? "Movie").replace(/'/g, "&#39;")}', '${st.trailerKey ?? ""}', '${row.tmdbId ?? ""}')">
+                                <button type="button" class="btn btn-square btn-outline btn-sm border-base-300 text-primary hover:bg-primary/10 hover:border-primary/40 tooltip" data-tip="Trailer" onclick="openMovieTrailer(this, '${(row.title ?? "Movie").replace(/'/g, "&#39;")}', '${st.trailerKey ?? ""}', '${row.tmdbId ?? ""}')">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <polygon points="5 3 19 12 5 21 5 3"/>
                                     </svg>

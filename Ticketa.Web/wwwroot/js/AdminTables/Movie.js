@@ -275,7 +275,7 @@ if (dataTableElement) {
             className: "align-middle text-center w-24",
             render: (data) => {
                 if (data) {
-                    return `<img src="${imageBase}${data}" alt="Poster" class="w-16 rounded shadow-sm mx-auto" />`;
+                    return `<img src="${imageBase}${data}" alt="Poster" class="w-16 h-24 rounded shadow-sm mx-auto" />`;
                 }
 
                 return `<div class="w-16 h-24 bg-base-300 rounded flex items-center justify-center text-xs text-base-content/50 mx-auto">No Image</div>`;
@@ -870,7 +870,7 @@ window.updateMovieStatus = async function (id, selectEl) {
     selectEl.style.opacity = '0.7';
     selectEl.style.cursor = 'wait';
     indicator.innerHTML = '⟳';
-    indicator.className = 'status-indicator absolute -right-1 -top-1 text-xs animate-spin text-violet-600';
+    indicator.className = 'status-indicator absolute -right-1 -top-1 text-xs animate-spin text-primary';
     indicator.classList.remove('hidden');
 
     try {

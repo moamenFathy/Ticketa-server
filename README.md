@@ -1,435 +1,183 @@
-# 🎬 Ticketa — Halls & Seats Module
+# 🎬 Ticketa — Modern Cinema Booking & Management System
 
-> **Fox Cinema-style app** | ASP.NET Core MVC | by Moamen
-
----
-
-## 🏗️ Architecture — Layered Solution
-
-```
-Ticketa.sln
-├── Ticketa.Core           → Entities, Enums, Interfaces, DTOs, Helpers
-├── Ticketa.Infrastructure → EF Core, Repositories, UoW, Services
-├── Ticketa.Web            → Controllers, ViewModels, Views
-└── Ticketa.Api            → API Controllers, minimal setup — بيشارك نفس Core و Infrastructure
-```
-
-> **ملاحظة**: الـ `Ticketa.Api` project اتضاف عشان يخدم الـ customer-facing endpoints (movie listing، seat selection، booking). بيشارك نفس `Ticketa.Core` و`Ticketa.Infrastructure` مع الـ MVC project — مفيش code duplication.
+> A full-stack, enterprise-grade cinema ticketing and management platform inspired by VOX Cinemas and AMC. Built with a clean, layered ASP.NET Core backend and a modern React 19 SPA frontend.
 
 ---
 
-## ✅ القرار المتخذ — Fixed Template per Hall Type
+## 📚 Documentation Hub
 
-### المشكلة المطروحة
+Explore the in-depth technical documentation self-hosted directly within this repository:
 
-كانت فيه خيارين:
+```text
+TicketaSol/
+├── docs/
+│   ├── architecture.md               # Solution Architecture & System Design
+│   ├── database.md                   # Database Schema, Indexing & EF Core Design
+│   ├── authentication.md             # Dual-Token JWT Auth & Granular RBAC
+│   ├── testing-plan.md               # Testing Pyramid, xUnit, Moq, Stryker & Coverage
+│   ├── decisions/                    # Architecture Decision Records (ADRs)
+│   │   ├── sql-server-vs-postgresql.md
+│   │   ├── hall-template.md
+│   │   └── payment-first-booking.md
+│   └── features/                     # Feature Deep-Dives & Workflows
+│       ├── booking.md
+│       ├── payments.md
+│       └── showtimes.md
+└── README.md                         # Project Overview & Gateway
+```
 
-- **Option A — Admin يرسم الـ Map يدوياً**: admin يشوف grid كامل، يحدد إيه الكراسي اللي موجودة وإيه اللي مش موجودة، وبعدين يعيّن category لكل كرسي أو row.
-- **Option B — Fixed Template لكل Hall Type**: كل نوع hall (Standard / IMAX / Gold) بيجي بـ layout جاهز. الـ seats بتتولد أوتوماتيك على أساسه وقت إنشاء الـ hall.
+### 📑 Core System Documentation
+* **[🏗️ System Architecture & Design](docs/architecture.md)** — Layered solution structure (`Core`, `Infrastructure`, `Web`, `Api`, `Tests`), design patterns, and IIS hosting resilience.
+* **[🗄️ Database Architecture & Schema](docs/database.md)** — Entity relationships, virtual seat model, filtered indexing (`[IsArchived] = 0`), and referential integrity.
+* **[🔐 Authentication & Security](docs/authentication.md)** — In-memory JWT access tokens, `httpOnly` refresh cookies, 401 interceptor queue, OTP verification, and reflection-based RBAC permissions.
+* **[🧪 Testing Plan & Strategy](docs/testing-plan.md)** — xUnit, Moq, Testcontainers SQL Server, Stryker.NET mutation testing, and the 10-phase testing roadmap.
 
-### ✅ القرار: Option B — Fixed Template
+### 🏛️ Architecture Decision Records (ADRs)
+* **[ADR 001: SQL Server vs. PostgreSQL](docs/decisions/sql-server-vs-postgresql.md)** — Rationale for choosing SQL Server, SSMS execution plan diagnostics, and filtered index support.
+* **[ADR 002: Fixed Mathematical Hall Templates](docs/decisions/hall-template.md)** — Why we replaced the traditional static `Seat` table with mathematical templates (`HallTypeHelper`).
+* **[ADR 003: Payment-First Booking Architecture](docs/decisions/payment-first-booking.md)** — Eliminating abandoned reservation holds, avoiding Redis overhead, and managing race conditions via auto-refunds.
 
-**السبب:**
-- الـ seat map editor في Option A ده feature لوحده — drag to select، toggle existence، bulk assign — ده 2–3 أسابيع شغل لو عملناه صح
-- الـ cinema chains الحقيقية (VOX, Cinemark) بتشتغل بنفس الفكرة — pre-configured templates مش بتتغير بعد الـ setup
-- الـ HallType بالفعل موجود في الـ Showtime module — نكمّل عليه
-- لو في المستقبل hall معين محتاج layout مختلف → نضيف "override mode" فوق الـ template ده بدل ما نبني من الأول
+### 🚀 Feature Deep-Dives
+* **[🎟️ Cinema Booking & Seat Selection](docs/features/booking.md)** — Customer booking journey, interactive seat grid, coordinate normalization, and "My Tickets" inventory view.
+* **[💳 Payments & Ticket Dispatch](docs/features/payments.md)** — Stripe `PaymentElement` integration, server-side PNG QR code generation with `QRCoder`, and MailKit CID inline email tickets.
+* **[🕐 Showtimes & Interactive Schedule Management](docs/features/showtimes.md)** — 15-minute cleaning turnaround buffer, state machine transitions, and the back-office Gantt Chart schedule editor.
 
 ---
 
-## 🎭 Enums — القرارات المتخذة
+## 🏗️ Solution Overview
 
-```csharp
-// Ticketa.Core/Enums/HallType.cs
-public enum HallType
-{
-    Standard,
-    IMAX,
-    Gold
-}
+```text
+TicketaSol.sln
+├── Ticketa.Core           → Domain Entities, Enums, Interfaces, DTOs, Helpers
+├── Ticketa.Infrastructure → EF Core, DbContext, Repositories, UoW, Services, MailKit, QRCoder
+├── Ticketa.Web            → Admin MVC Portal (Controllers, ViewModels, Views, Razor Layouts)
+├── Ticketa.Api            → Customer-Facing REST API (JWT Auth, Booking, Payments, Movies)
+└── Ticketa.Tests          → xUnit, Moq, Stryker Mutation Testing, TestBuilders
 ```
 
-```csharp
-// Ticketa.Core/Enums/SeatCategory.cs
-public enum SeatCategory
-{
-    Regular,
-    VIP,
-    Premium,
-    GoldLounge,
-    GoldRecliner
-}
 ```
-
-### Allowed Categories per Hall Type
-
-| Hall Type | Seat Categories المسموح بيها |
-|-----------|-------------------------------|
-| Standard  | Regular, VIP                  |
-| IMAX      | Regular, Premium              |
-| Gold      | GoldLounge, GoldRecliner      |
-
----
-
-## 🏛️ Entities
-
-### Hall
-
-```csharp
-// Ticketa.Core/Entities/Hall.cs
-public class Hall
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;   // "Hall 1", "IMAX Hall"
-    public HallType Type { get; set; }
-    public int TotalRows { get; set; }      // مشتق من الـ template — بيتحفظ للعرض بس
-    public int SeatsPerRow { get; set; }    // مشتق من الـ template — بيتحفظ للعرض بس
-
-    // ❌ ICollection<Seat> Seats — اتشالت، مفيش Seat table في الـ DB
-    public ICollection<Showtime> Showtimes { get; set; } = new List<Showtime>();
-}
-```
-
-### Seat (⚠️ تم التراجع عنها — لا يوجد Seat table في الـ DB)
-
-> **القرار المحدّث**: الـ `Seat` entity اتشالت من الـ DB. بدل ما نحفظ كل كرسي كـ row في الـ database، الـ layout بيتولد on-demand من الـ `HallTypeHelper` template وقت الـ booking. ده بيوفر storage ويبسّط الـ schema — الـ hall type نفسه كافي يحدد الـ layout الكامل.
-
-```
-// ❌ مش موجودة في الـ DB بعد كده
-public class Seat { ... }
-```
-
-> الـ seat selection في الـ Booking phase هتشتغل على الـ template مباشرة — الـ booked seats بيتتتبعوا في جدول `Booking` أو `BookedSeat` مش في جدول `Seat` منفصل.
-
----
-
-## 🧩 HallTypeHelper
-
-القاعدة اللي بتحدد إيه الـ categories المسموح بيها والـ template الافتراضي بتتحط في **static helper في Core** — مش متفرقة في الـ UI أو الـ service.
-
-```csharp
-// Ticketa.Core/Helpers/HallTypeHelper.cs
-public static class HallTypeHelper
-{
-    public static IReadOnlyList<SeatCategory> GetAllowedCategories(HallType type) => type switch
-    {
-        HallType.Standard => [SeatCategory.Regular, SeatCategory.VIP],
-        HallType.IMAX     => [SeatCategory.Regular, SeatCategory.Premium],
-        HallType.Gold     => [SeatCategory.GoldLounge, SeatCategory.GoldRecliner],
-        _                 => []
-    };
-
-    public static HallTemplate GetTemplate(HallType type) => type switch
-    {
-        HallType.Standard => new HallTemplate
-        {
-            Rows       = 10,
-            SeatsPerRow = 12,
-            RowCategoryMap = BuildMap(regularRows: 8, premiumRows: 2,
-                regular: SeatCategory.Regular, premium: SeatCategory.VIP)
-        },
-        HallType.IMAX => new HallTemplate
-        {
-            Rows        = 14,
-            SeatsPerRow = 16,
-            RowCategoryMap = BuildMap(regularRows: 10, premiumRows: 4,
-                regular: SeatCategory.Regular, premium: SeatCategory.Premium)
-        },
-        HallType.Gold => new HallTemplate
-        {
-            Rows        = 6,
-            SeatsPerRow = 8,
-            RowCategoryMap = BuildMap(regularRows: 3, premiumRows: 3,
-                regular: SeatCategory.GoldLounge, premium: SeatCategory.GoldRecliner)
-        },
-        _ => throw new ArgumentOutOfRangeException()
-    };
-
-    private static Dictionary<int, SeatCategory> BuildMap(
-        int regularRows, int premiumRows,
-        SeatCategory regular, SeatCategory premium)
-    {
-        var map = new Dictionary<int, SeatCategory>();
-
-        for (int r = 1; r <= regularRows; r++)
-            map[r] = regular;
-
-        for (int r = regularRows + 1; r <= regularRows + premiumRows; r++)
-            map[r] = premium;
-
-        return map;
-    }
-}
-
-// Ticketa.Core/Helpers/HallTemplate.cs
-public class HallTemplate
-{
-    public int Rows { get; set; }
-    public int SeatsPerRow { get; set; }
-    public Dictionary<int, SeatCategory> RowCategoryMap { get; set; } = new();
-}
+┌─────────────────────────────────────────────────────────────┐
+│                       Client Layer                          │
+│   React 19 + TypeScript + Vite (Customer Web App)          │
+│   DaisyUI + Tailwind MVC Views (Admin Back-Office)          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+┌─────────────────────────┐ ┌─────────────────────────┐
+│       Ticketa.Api       │ │       Ticketa.Web       │
+│ (RESTful Controllers)   │ │  (MVC Admin Controllers)│
+└────────────┬────────────┘ └────────────┬────────────┘
+             │                           │
+             └─────────────┬─────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Ticketa.Infrastructure                      │
+│  - EF Core AppDbContext & SQL Server                        │
+│  - Generic & Specialized Repositories + Unit of Work        │
+│  - Business Services (Booking, Payment, Showtime, etc.)     │
+│  - External Integrations (Stripe, MailKit, QRCoder, TMDB)   │
+│  - Background Hosted Services (ShowtimeCompletionService)   │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Ticketa.Core                           │
+│  - Domain Entities (Movie, Showtime, Hall, Booking, etc.)   │
+│  - Domain Enums & Helper Logic (HallTypeHelper, Permissions)│
+│  - Specifications & Expression Evaluators                   │
+│  - Data Transfer Objects (DTOs) & Service Contracts         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔧 Hall Service
+## ⚡ Key Engineering Highlights
 
-### IHallService (Core)
-
-```csharp
-// Ticketa.Core/Interfaces/IHallService.cs
-public interface IHallService
-{
-    Task<IEnumerable<HallDto>> GetAllAsync();
-    Task<string?> CreateAsync(HallCreateDto dto);
-    Task<bool> DeleteAsync(int id);
-}
-```
-
-### HallService — CreateAsync (Infrastructure)
-
-الـ service بتجيب الـ template عشان تحفظ `TotalRows` و`SeatsPerRow` على الـ hall للعرض — مش بتولد seat rows في الـ DB.
-
-```csharp
-// Ticketa.Infrastructure/Services/HallService.cs
-public async Task<string?> CreateAsync(HallCreateDto dto)
-{
-    var template = HallTypeHelper.GetTemplate(dto.Type);
-
-    var hall = new Hall
-    {
-        Name        = dto.Name,
-        Type        = dto.Type,
-        TotalRows   = template.Rows,
-        SeatsPerRow = template.SeatsPerRow
-        // ❌ مفيش seat generation هنا — الـ layout بيتجيب من الـ template on-demand
-    };
-
-    await _uow.Halls.CreateAsync(hall);
-    await _uow.SaveAsync();
-
-    return null; // null = success, string = error message
-}
-```
-
-> الـ `RowCategoryMap` في الـ template هو المصدر الوحيد للـ seat layout — بيتستخدم وقت الـ booking مش وقت الـ hall creation.
+* **Virtual Seat Architecture**: No static `Seat` table in the database; auditoriums are synthesized dynamically on demand via `HallTypeHelper`.
+* **Zero-Orphan Booking Engine**: Payment-first architecture guarantees every database booking represents a verified, paid transaction.
+* **Storage-Engine Race Protection**: `(ShowtimeId, Row, SeatNumber)` composite unique index prevents double-booking at the hardware storage layer, backed by instant automated Stripe refunds on conflict.
+* **Secure Dual-Token Auth**: Access tokens are kept strictly in React memory (preventing XSS access); refresh tokens use `httpOnly` secure cookies with a transparent 401 replay queue.
+* **High-Performance Filtered Indexes**: `[IsArchived] = 0` filtered indexes preserve fast point-lookup execution plans over years of operational history.
+* **Reflection-Driven Permissions (RBAC)**: Fine-grained, string-constant permissions discovered via reflection, eliminating coarse `Manage` permissions and allowing nuanced staff role configuration.
 
 ---
 
-## 🎬 Movies Service — API Methods
+## 🛠️ Tech Stack
 
-الـ methods دي اتضافت على `IMoviesService` عشان يخدموا الـ `Ticketa.Api` project. بياخدوا `CancellationToken` عشان لو الـ client قطع الـ connection، الـ DB query تتوقف فوراً.
+### Backend
+* **Runtime**: .NET 10 (C# 13)
+* **Frameworks**: ASP.NET Core Web API & ASP.NET Core MVC
+* **ORM & Database**: Entity Framework Core 10, Microsoft SQL Server
+* **Security**: ASP.NET Core Identity, JWT Bearer Tokens, Custom Claims Authorizer
+* **Integrations**: Stripe.net (Payments & Refunds), MailKit (SMTP), QRCoder (QR Ticket Generation), TMDB API (Movie Metadata)
+* **Testing**: xUnit, Moq, Testcontainers.MsSql, Stryker.NET, ReportGenerator
 
-### IMoviesService — الـ Methods الجديدة (Core)
-
-```csharp
-// Ticketa.Core/Interfaces/IMoviesService.cs
-Task<IEnumerable<ActiveMovieWithDetailsDto>> GetAllActiveWithDetailsAsync(CancellationToken ct = default);
-Task<ActiveMovieWithDetailsDto?> GetActiveMovieWithDetailsByIdAsync(int id, CancellationToken ct = default);
-```
-
-> `= default` معناها إن الـ callers الموجودين (زي الـ admin MVC controllers) مش محتاجين يتغيروا — بياخدوا `CancellationToken.None` تلقائياً.
-
-### MoviesService — Implementation (Infrastructure)
-
-```csharp
-// Ticketa.Infrastructure/Services/MoviesService.cs
-public async Task<IEnumerable<ActiveMovieWithDetailsDto>> GetAllActiveWithDetailsAsync(
-    CancellationToken ct = default)
-{
-    var spec = new MovieSpecification(MovieStatus.Active, null, includeGenres: true);
-    var movies = await _uow.Movies.GetAllWithSpecAsync(spec, ct);
-
-    return movies.Select(m => new ActiveMovieWithDetailsDto
-    {
-        Id          = m.Id,
-        Title       = m.Title,
-        PosterPath  = m.PosterPath,
-        VoteAverage = m.VoteAverage,
-        Runtime     = m.RuntimeMinutes,
-        Genres      = m.Genres.Select(g => g.Name).ToList()
-    });
-}
-
-public async Task<ActiveMovieWithDetailsDto?> GetActiveMovieWithDetailsByIdAsync(
-    int id, CancellationToken ct = default)
-{
-    var spec = new MovieSpecification(id, includeGenres: true);
-    var movie = await _uow.Movies.GetEntityWithSpecAsync(spec, ct);
-
-    if (movie == null) return null;
-
-    return new ActiveMovieWithDetailsDto
-    {
-        Id          = movie.Id,
-        Title       = movie.Title,
-        PosterPath  = movie.PosterPath,
-        VoteAverage = movie.VoteAverage,
-        Runtime     = movie.RuntimeMinutes,
-        Genres      = movie.Genres.Select(g => g.Name).ToList()
-    };
-}
-```
-
-> **ليه مفيش AutoMapper هنا؟** الـ DTO بتختلف عن الـ entity في حاجتين: `RuntimeMinutes` → `Runtime` (rename) و`Genres` من `ICollection<Genre>` → `List<string>` (flatten). الـ manual `Select` أوضح من AutoMapper profile بـ `ForMember` overrides.
-
-### MoviesController — API (Ticketa.Api)
-
-```csharp
-// Ticketa.Api/Controllers/MoviesController.cs
-[HttpGet]
-[ProducesResponseType(typeof(IEnumerable<ActiveMovieWithDetailsDto>), StatusCodes.Status200OK)]
-[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-public async Task<IActionResult> GetAll(CancellationToken ct)
-{
-    try
-    {
-        var movies = await _moviesService.GetAllActiveWithDetailsAsync(ct);
-        return Ok(movies);
-    }
-    catch (OperationCanceledException)
-    {
-        return StatusCode(499, "The request was canceled.");
-    }
-    catch (Exception ex)
-    {
-        return StatusCode(StatusCodes.Status500InternalServerError,
-            $"An error occurred while retrieving movies: {ex.Message}");
-    }
-}
-
-[HttpGet("{id:int}")]
-[ProducesResponseType(typeof(ActiveMovieWithDetailsDto), StatusCodes.Status200OK)]
-[ProducesResponseType(StatusCodes.Status400BadRequest)]
-[ProducesResponseType(StatusCodes.Status404NotFound)]
-[ProducesResponseType(StatusCodes.Status500InternalServerError)]
-public async Task<IActionResult> Get(int id, CancellationToken ct)
-{
-    try
-    {
-        if (id <= 0)
-            return BadRequest("The id must be greater than 0.");
-
-        var movie = await _moviesService.GetActiveMovieWithDetailsByIdAsync(id, ct);
-
-        if (movie == null)
-            return NotFound($"No movie found with id {id}.");
-
-        return Ok(movie);
-    }
-    catch (OperationCanceledException)
-    {
-        return StatusCode(499, "The request was canceled.");
-    }
-    catch (Exception ex)
-    {
-        return StatusCode(StatusCodes.Status500InternalServerError,
-            $"An error occurred while retrieving the movie: {ex.Message}");
-    }
-}
-```
-
-> **ملاحظة**: `StatusCodes.Status499ClientClosedRequest` مش موجود في ASP.NET Core — 499 كود Nginx غير رسمي. بنستخدم الرقم مباشرة `499`.
+### Frontend
+* **Core**: React 19, TypeScript, Vite
+* **State & Data Fetching**: TanStack React Query v5, Axios
+* **UI & Styling**: Tailwind CSS, shadcn/ui (Radix UI), DaisyUI (Admin), Framer Motion
+* **Forms & Validation**: React Hook Form, Zod, input-otp
+* **Payment UI**: @stripe/react-stripe-js, @stripe/stripe-js
 
 ---
 
-## 💰 SeatCategoryPrice (اختياري — للـ Booking Phase)
+## 🚀 Getting Started & Local Development
 
-```csharp
-// Ticketa.Core/Entities/SeatCategoryPrice.cs
-public class SeatCategoryPrice
-{
-    public int Id { get; set; }
-    public HallType HallType { get; set; }
-    public SeatCategory Category { get; set; }
-    public decimal Price { get; set; }
-}
+### Prerequisites
+* [.NET 10 SDK](https://dotnet.microsoft.com/download)
+* [Node.js 20+ & npm](https://nodejs.org/)
+* [SQL Server](https://www.microsoft.com/sql-server) (LocalDB, Developer Edition, or Docker container)
+
+### 1. Clone & Configure Backend
+```bash
+# Clone the repository
+git clone https://github.com/your-username/Ticketa.git
+cd TicketaSol
+
+# Configure User Secrets for Ticketa.Api
+cd Ticketa.Api
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=(localdb)\\mssqllocaldb;Database=TicketaDb;Trusted_Connection=True;MultipleActiveResultSets=true"
+dotnet user-secrets set "Stripe:SecretKey" "sk_test_..."
+dotnet user-secrets set "Stripe:PublishableKey" "pk_test_..."
+dotnet user-secrets set "EmailSettings:Password" "your-smtp-app-password"
 ```
 
-ده بيخلي الـ pricing قابل للتعديل من الـ admin بدل ما يكون hardcoded. بيتبنى في الـ Booking phase مش دلوقتي.
-
----
-
-## 📐 DTOs
-
-```csharp
-// Ticketa.Core/DTOs/Halls/HallCreateDto.cs
-public class HallCreateDto
-{
-    public string Name { get; set; } = string.Empty;
-    public HallType Type { get; set; }
-}
+### 2. Apply Migrations & Seed Database
+```bash
+dotnet ef database update --project ../Ticketa.Infrastructure --startup-project .
 ```
 
-```csharp
-// Ticketa.Core/DTOs/Halls/HallDto.cs
-public class HallDto
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public HallType Type { get; set; }
-    public int TotalRows { get; set; }
-    public int SeatsPerRow { get; set; }
-    public int TotalSeats => TotalRows * SeatsPerRow;
-}
+### 3. Run Backend Services
+```bash
+# Start the Web API (port 5000)
+dotnet run --project Ticketa.Api
+
+# Or start the Admin Web Portal (port 5001)
+dotnet run --project Ticketa.Web
 ```
 
-```csharp
-// Ticketa.Core/DTOs/Movies/ActiveMovieWithDetailsDto.cs
-public class ActiveMovieWithDetailsDto
-{
-    public int Id { get; set; }
-    public string Title { get; set; } = string.Empty;
-    public string? PosterPath { get; set; }
-    public double VoteAverage { get; set; }
-    public int Runtime { get; set; }        // mapped from RuntimeMinutes
-    public List<string> Genres { get; set; } = [];
-}
+### 4. Run Frontend Client
+```bash
+cd ../Ticketa.Client
+npm install
+npm run dev
 ```
 
 ---
 
-## 🔄 Admin Flow
+## 🧪 Testing & Code Coverage
 
-```
-Create Hall
-  └─ Admin يختار: Name + HallType (Standard / IMAX / Gold)
-       └─ Service تجيب الـ template للـ type ده
-            └─ Seats بتتولد أوتوماتيك (rows × seatsPerRow)
-                 └─ كل seat بياخد الـ category بتاعته من الـ RowCategoryMap
-                      └─ Hall + Seats بيتحفظوا في transaction واحدة
+Run all unit and integration tests:
+```bash
+dotnet test
 ```
 
----
+Generate the HTML Code Coverage Report (Windows batch script):
+```cmd
+run-coverage.bat
+```
 
-## 🗺️ Features المخططة / المتفق عليها (Updated)
-
-- [x] Movie Import (TMDB — popular list + search + trailer fetch)
-- [x] Movie Index Table (DataTables.js — server-side, segmented filter, search, ordering)
-- [x] Genre — many-to-many مع Movie، بتتاخد تلقائياً من TMDB وقت الـ import
-- [x] Showtime Scheduling — CreateAsync مع buffer check (15 min)
-- [x] Hall Module — HallType enum، Fixed Template، Seat auto-generation
-- [x] Hall CRUD — Create + Index + Delete. الـ Seat entity اتشالت واتعوضت بـ predefined templates جوا `HallTypeHelper` — مفيش seat rows في الـ DB، الـ layout بيتولد on-demand من الـ template وقت الـ booking
-- [x] User Authentication — ASP.NET Identity، custom `AppUser`، email verification بـ 6-digit code، Gmail SMTP عبر MailKit
-- [x] Ticketa.Api project — بيشارك Core و Infrastructure مع الـ MVC project، Movies endpoints (GetAll + GetById) مع CancellationToken support
-- [ ] Movie Management (Edit / Archive)
-- [ ] Seat Selection UI — customer بيختار كرسيه من الـ map وقت الـ booking (layout بيتجيب من الـ template مش من الـ DB)
-- [ ] Booking Flow
-- [ ] Admin Dashboard
-- [ ] SeatCategoryPrice — pricing config per hall type + category
-- [ ] Payment (مش متحدد بعد)
-
----
-
-## 📝 ملاحظات للمستقبل
-
-- الـ `HallTypeHelper` هو المصدر الوحيد للحقيقة بخصوص الـ templates والـ allowed categories — أي تغيير في الـ layout بيتعمل هنا بس
-- لو hall معين محتاج layout مختلف → نضيف override flag على الـ `Hall` entity ونعمل admin UI لتعديل الـ seats يدوياً — ده additive مش rewrite
-- الـ `SeatCategoryPrice` بيتبنى في الـ Booking phase — مش محتاجه دلوقتي
-- الـ seat generation بتحصل مرة واحدة وقت الـ create — مش on-the-fly
-- الـ `Seat.Row` و`Seat.Number` كلهم 1-based — consistent مع الـ UI اللي هيعرضهم للـ customer
-- الـ API controllers مش عندها global exception middleware دلوقتي — كل action بتتعامل مع الـ exceptions بنفسها. لو الـ endpoints اتكبرت → نضيف `ExceptionHandlingMiddleware` في `Ticketa.Api` عشان نشيل الـ try/catch repetition
-
----
-
-*آخر تحديث: May 2026 — Ticketa.Api project added، Movies API endpoints + CancellationToken*
+Run Stryker Mutation Testing:
+```bash
+dotnet stryker
+```
